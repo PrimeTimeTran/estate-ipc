@@ -1,43 +1,353 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="stylesheet" href="/src/styles.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
-    <script type="module" src="/src/main.ts" defer></script>
-  </head>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
+		<title>Estate</title>
 
-      <div class="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/src/assets/vite.svg" class="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img
-            src="/src/assets/tauri.svg"
-            class="logo tauri"
-            alt="Tauri logo"
-          />
-        </a>
-        <a href="https://www.typescriptlang.org/docs" target="_blank">
-          <img
-            src="/src/assets/typescript.svg"
-            class="logo typescript"
-            alt="typescript logo"
-          />
-        </a>
-      </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
+		<script src="https://cdn.tailwindcss.com"></script>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
-    </main>
-  </body>
+		<link rel="stylesheet" href="/src/styles.css" />
+
+		<script>
+			tailwind.config = {
+				theme: {
+					extend: {
+						colors: {
+							background:
+								"rgb(var(--color-background) / <alpha-value>)",
+							surface:
+								"rgb(var(--color-surface) / <alpha-value>)",
+							"surface-container":
+								"rgb(var(--color-surface-container) / <alpha-value>)",
+							primary:
+								"rgb(var(--color-primary) / <alpha-value>)",
+							"on-primary":
+								"rgb(var(--color-on-primary) / <alpha-value>)",
+							"on-background":
+								"rgb(var(--color-on-background) / <alpha-value>)",
+							"on-surface":
+								"rgb(var(--color-on-surface) / <alpha-value>)",
+							outline:
+								"rgb(var(--color-outline) / <alpha-value>)",
+						},
+						borderRadius: {
+							sm: "var(--radius-sm)",
+							md: "var(--radius-md)",
+							lg: "var(--radius-lg)",
+							xl: "var(--radius-xl)",
+						},
+					},
+				},
+			}
+		</script>
+	</head>
+
+	<body class="min-h-screen bg-background text-on-background antialiased">
+		<main class="mx-auto max-w-4xl px-6 py-10">
+
+			<!-- ====================================================== -->
+			<!-- Header                                                 -->
+			<!-- ====================================================== -->
+
+			<header class="mb-8">
+				<div
+					class="mb-2 text-sm font-medium uppercase tracking-widest text-primary"
+				>
+					Estate
+				</div>
+
+				<h1 class="text-3xl font-semibold tracking-tight">
+					Workspace Context
+				</h1>
+
+				<p class="mt-2 text-sm text-on-surface/60">
+					Current environment observed by Estate.
+				</p>
+			</header>
+
+
+			<!-- ====================================================== -->
+			<!-- Status                                                 -->
+			<!-- ====================================================== -->
+
+			<div
+				id="status"
+				class="mb-6 rounded-lg border border-outline/15 bg-surface-container px-4 py-3 text-sm text-on-surface/60"
+			>
+				Connecting to Estate...
+			</div>
+
+
+			<!-- ====================================================== -->
+			<!-- Estate Context                                         -->
+			<!-- ====================================================== -->
+
+			<section class="grid gap-4 sm:grid-cols-3">
+
+				<!-- Active App -->
+				<article
+					class="rounded-lg border border-outline/15 bg-surface-container p-5 shadow-sm"
+				>
+					<div
+						class="mb-3 text-xs font-medium uppercase tracking-wider text-on-surface/50"
+					>
+						Active App
+					</div>
+
+					<strong
+						id="active-app"
+						class="block truncate text-lg font-medium text-on-surface"
+					>
+						...
+					</strong>
+				</article>
+
+				<!-- Workspace -->
+				<article
+					class="rounded-lg border border-outline/15 bg-surface-container p-5 shadow-sm"
+				>
+					<div
+						class="mb-3 text-xs font-medium uppercase tracking-wider text-on-surface/50"
+					>
+						Workspace
+					</div>
+
+					<strong
+						id="workspace"
+						class="block truncate text-lg font-medium text-on-surface"
+					>
+						...
+					</strong>
+				</article>
+
+				<!-- Mode -->
+				<article
+					class="rounded-lg border border-outline/15 bg-surface-container p-5 shadow-sm"
+				>
+					<div
+						class="mb-3 text-xs font-medium uppercase tracking-wider text-on-surface/50"
+					>
+						Mode
+					</div>
+
+					<strong
+						id="mode"
+						class="inline-flex rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary"
+					>
+						...
+					</strong>
+				</article>
+
+			</section>
+
+
+			<!-- ====================================================== -->
+			<!-- Connection + Tauri Runtime                             -->
+			<!-- ====================================================== -->
+
+			<section class="mt-6 grid gap-4 sm:grid-cols-2">
+
+				<!-- IPC Connection -->
+				<article
+					class="rounded-lg border border-outline/15 bg-surface-container p-5"
+				>
+					<div
+						class="mb-2 text-xs font-medium uppercase tracking-wider text-on-surface/50"
+					>
+						IPC Connection
+					</div>
+
+					<code
+						id="estate-connection"
+						class="block truncate font-mono text-xs text-on-surface/70"
+					>
+						...
+					</code>
+				</article>
+
+				<!-- Tauri PID -->
+				<article
+					class="rounded-lg border border-outline/15 bg-surface-container p-5"
+				>
+					<div
+						class="mb-2 text-xs font-medium uppercase tracking-wider text-on-surface/50"
+					>
+						Tauri PID
+					</div>
+
+					<strong id="tauri-pid" class="font-mono text-sm">
+						...
+					</strong>
+				</article>
+
+			</section>
+
+
+			<!-- ====================================================== -->
+			<!-- Tauri Runtime                                         -->
+			<!-- ====================================================== -->
+
+			<section class="mt-6">
+				<h2
+					class="mb-3 text-sm font-medium uppercase tracking-wider text-on-surface/50"
+				>
+					Tauri Runtime
+				</h2>
+
+				<div class="grid gap-4 sm:grid-cols-2">
+
+					<!-- Platform -->
+					<article
+						class="rounded-lg border border-outline/15 bg-surface-container p-5"
+					>
+						<div class="mb-2 text-xs text-on-surface/50">
+							Platform
+						</div>
+
+						<strong
+							id="tauri-platform"
+							class="text-sm font-medium"
+						>
+							...
+						</strong>
+					</article>
+
+					<!-- Architecture -->
+					<article
+						class="rounded-lg border border-outline/15 bg-surface-container p-5"
+					>
+						<div class="mb-2 text-xs text-on-surface/50">
+							Architecture
+						</div>
+
+						<strong
+							id="tauri-arch"
+							class="text-sm font-medium"
+						>
+							...
+						</strong>
+					</article>
+
+					<!-- CWD -->
+					<article
+						class="rounded-lg border border-outline/15 bg-surface-container p-5 sm:col-span-2"
+					>
+						<div class="mb-2 text-xs text-on-surface/50">
+							Working Directory
+						</div>
+
+						<strong
+							id="tauri-cwd"
+							class="block truncate font-mono text-sm"
+						>
+							...
+						</strong>
+					</article>
+
+				</div>
+			</section>
+
+
+			<!-- ====================================================== -->
+			<!-- Filesystem IPC                                         -->
+			<!-- ====================================================== -->
+
+			<section class="mt-6">
+				<h2
+					class="mb-3 text-sm font-medium uppercase tracking-wider text-on-surface/50"
+				>
+					Filesystem IPC
+				</h2>
+
+				<div class="grid gap-4 sm:grid-cols-2">
+
+					<!-- fs_list -->
+					<article
+						class="rounded-lg border border-outline/15 bg-surface-container p-5 sm:col-span-2"
+					>
+						<div class="mb-2 text-xs text-on-surface/50">
+							fs_list
+						</div>
+
+						<pre
+							id="fs-list"
+							class="max-h-64 overflow-auto rounded-md bg-background p-4 font-mono text-xs text-on-surface/70"
+						>...</pre>
+					</article>
+
+
+					<!-- fs_read -->
+					<article
+						class="rounded-lg border border-outline/15 bg-surface-container p-5"
+					>
+						<div class="mb-2 text-xs text-on-surface/50">
+							fs_read
+						</div>
+
+						<pre
+							id="fs-read"
+							class="overflow-auto rounded-md bg-background p-4 font-mono text-xs text-on-surface/70"
+						>...</pre>
+					</article>
+
+
+					<!-- fs_create -->
+					<article
+						class="rounded-lg border border-outline/15 bg-surface-container p-5"
+					>
+						<div class="mb-2 text-xs text-on-surface/50">
+							fs_create
+						</div>
+
+						<strong
+							id="fs-create"
+							class="text-sm font-medium text-on-surface"
+						>
+							...
+						</strong>
+					</article>
+
+
+					<!-- fs_update -->
+					<article
+						class="rounded-lg border border-outline/15 bg-surface-container p-5"
+					>
+						<div class="mb-2 text-xs text-on-surface/50">
+							fs_update
+						</div>
+
+						<strong
+							id="fs-update"
+							class="text-sm font-medium text-on-surface"
+						>
+							...
+						</strong>
+					</article>
+
+
+					<!-- fs_delete -->
+					<article
+						class="rounded-lg border border-outline/15 bg-surface-container p-5"
+					>
+						<div class="mb-2 text-xs text-on-surface/50">
+							fs_delete
+						</div>
+
+						<strong
+							id="fs-delete"
+							class="text-sm font-medium text-on-surface"
+						>
+							...
+						</strong>
+					</article>
+
+				</div>
+			</section>
+
+		</main>
+
+		<script type="module" src="/src/main.ts"></script>
+	</body>
 </html>
