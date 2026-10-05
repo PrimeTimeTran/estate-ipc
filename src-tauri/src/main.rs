@@ -1,10 +1,10 @@
+use estate::prelude::*;
 use tauri::Emitter;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 
-mod estate;
-use estate::EstateClient;
-use estate_core::prelude::*;
+mod client;
+use client::{EstateClient, *};
 
 #[tokio::main]
 async fn main() {
@@ -12,7 +12,6 @@ async fn main() {
 	tauri::Builder::default()
 		.manage(estate)
 		.setup(|app| {
-			println!("🔥 TAURI → starting Estate event bridge");
 			start_estate_event_bridge(app.handle().clone());
 			Ok(())
 		})
@@ -29,6 +28,7 @@ async fn main() {
 		.run(tauri::generate_context!())
 		.expect("error while running Tauri application");
 }
+
 fn start_estate_event_bridge(app: tauri::AppHandle) {
 	println!("🔥 ESTATE EVENT BRIDGE → STARTING");
 	tokio::spawn(async move {
@@ -100,24 +100,22 @@ fn start_estate_event_bridge(app: tauri::AppHandle) {
 		// Long-lived event stream.
 		loop {
 			line.clear();
-		
+
 			let bytes = match reader.read_line(&mut line).await {
 				Ok(bytes) => bytes,
-		
+
 				Err(error) => {
-					eprintln!(
-						"🔥 ESTATE EVENT BRIDGE → read failed: {error}"
-					);
+					eprintln!("🔥 ESTATE EVENT BRIDGE → read failed: {error}");
 					return;
 				}
 			};
-		
+
 			if bytes == 0 {
 				println!("🔥 ESTATE EVENT BRIDGE → daemon disconnected");
 				return;
 			}
-		
-			let message: IpcMessage<estate_core::event::EventKind> =
+
+			let message: IpcMessage<estate::event::EventKind> =
 				match serde_json::from_str(line.trim_end()) {
 					Ok(message) => message,
 

@@ -4,13 +4,13 @@ use tokio::{
 	net::UnixStream,
 };
 
-use estate_core::{
+use estate::{
+	EventKind,
 	data::ESTATE_SOCKET,
 	estate_ipc::{
 		ClientKind, EstateCommand, EstateCommandResult, EstateContext, FileEntry, Hello, HelloAck,
 		IpcMessage, ProtocolVersion,
 	},
-	EventKind,
 };
 
 impl EstateClient {
@@ -90,6 +90,7 @@ impl EstateConnection {
 	pub fn connection_id(&self) -> uuid::Uuid {
 		self.ack.connection_id
 	}
+
 	// ─────────────────────────────────────────────
 	// Transport
 	// ─────────────────────────────────────────────
@@ -143,13 +144,13 @@ impl EstateConnection {
 			}
 		}
 	}
+}
+impl EstateConnection {
 	// ─────────────────────────────────────────────
+	
 	// Filesystem
 	// ─────────────────────────────────────────────
-	pub async fn fs_list(
-		&mut self,
-		path: String,
-	) -> anyhow::Result<Vec<FileEntry>> {
+	pub async fn fs_list(&mut self, path: String) -> anyhow::Result<Vec<FileEntry>> {
 		self.send(IpcMessage::FsList { path }).await?;
 		loop {
 			let message = self.receive().await?;
@@ -163,16 +164,10 @@ impl EstateConnection {
 					continue;
 				}
 				IpcMessage::Error(error) => {
-					anyhow::bail!(
-						"Estate fs_list error {:?}: {}",
-						error.code,
-						error.message
-					);
+					anyhow::bail!("Estate fs_list error {:?}: {}", error.code, error.message);
 				}
 				other => {
-					anyhow::bail!(
-						"unexpected fs_list response: {other:?}"
-					);
+					anyhow::bail!("unexpected fs_list response: {other:?}");
 				}
 			}
 		}
@@ -185,7 +180,6 @@ impl EstateConnection {
 			IpcMessage::Error(error) => {
 				anyhow::bail!("Estate fs_read error {:?}: {}", error.code, error.message);
 			}
-
 			other => {
 				anyhow::bail!("unexpected fs_read response: {other:?}");
 			}
@@ -446,13 +440,6 @@ pub struct EstateConnection {
 	ack: HelloAck,
 }
 
-// future in project (main●)
-// $ ls -l /tmp/estate.sock
-// srwxr-xr-x  1 future  wheel  0 Oct  4 17:28 /tmp/estate.sock
-//
-// future in project (main●)
-// $ file /tmp/estate.sock
-// /tmp/estate.sock: socket
 #[derive(Clone)]
 pub struct EstateClient {
 	socket: PathBuf,
