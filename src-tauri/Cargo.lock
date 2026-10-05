@@ -2121,6 +2121,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "estate-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "estate",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "euclid"
 version = "0.22.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6780,20 +6794,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "servo-tauri-app"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "estate",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tokio",
- "uuid",
 ]
 
 [[package]]

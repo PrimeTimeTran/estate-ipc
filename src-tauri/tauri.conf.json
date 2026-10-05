@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "servo-tauri-app",
+        "title": "Estate Paradigm Client",
         "width": 800,
         "height": 600
       }

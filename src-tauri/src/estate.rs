@@ -1,4 +1,8 @@
 use std::{path::PathBuf, process};
+use tokio::{
+	io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+	net::UnixStream,
+};
 
 use estate_core::{
 	data::ESTATE_SOCKET,
@@ -9,24 +13,6 @@ use estate_core::{
 	EventKind,
 };
 
-use tokio::{
-	io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-	net::UnixStream,
-};
-//
-// future in project (main●)
-// $ ls -l /tmp/estate.sock
-// srwxr-xr-x  1 future  wheel  0 Oct  4 17:28 /tmp/estate.sock
-//
-// future in project (main●)
-// $ file /tmp/estate.sock
-// /tmp/estate.sock: socket
-
-#[derive(Clone)]
-pub struct EstateClient {
-	socket: PathBuf,
-}
-
 impl EstateClient {
 	pub fn new() -> Self {
 		Self {
@@ -35,9 +21,7 @@ impl EstateClient {
 	}
 
 	pub async fn connect(&self) -> anyhow::Result<EstateConnection> {
-		println!("🔥 ESTATE CLIENT connecting to {:?}", self.socket);
 		let stream = UnixStream::connect(&self.socket).await?;
-		println!("🔥 ESTATE CLIENT socket connected");
 		let (read_half, mut write_half) = stream.into_split();
 		let hello = IpcMessage::<EventKind>::Hello(Hello {
 			protocol: ProtocolVersion::CURRENT,
@@ -46,15 +30,12 @@ impl EstateClient {
 		});
 
 		let json = serde_json::to_string(&hello)?;
-		println!("🔥 ESTATE CLIENT → HELLO: {json}");
 		write_half.write_all(json.as_bytes()).await?;
 		write_half.write_all(b"\n").await?;
 		write_half.flush().await?;
-		println!("🔥 ESTATE CLIENT ← waiting for HelloAck");
 		let mut reader = BufReader::new(read_half);
 		let mut line = String::new();
 		reader.read_line(&mut line).await?;
-		println!("🔥 ESTATE CLIENT ← HELLO ACK: {line:?}");
 		let message: IpcMessage<EventKind> = serde_json::from_str(&line)?;
 		let ack = match message {
 			IpcMessage::HelloAck(ack) => ack,
@@ -73,13 +54,38 @@ impl EstateClient {
 		})
 	}
 }
-
-pub struct EstateConnection {
-	reader: BufReader<tokio::net::unix::OwnedReadHalf>,
-	writer: tokio::net::unix::OwnedWriteHalf,
-	ack: HelloAck,
+impl EstateConnection {
+	pub async fn git_status(
+		&mut self,
+		path: impl Into<String>,
+	) -> anyhow::Result<EstateCommandResult> {
+		self
+			.run_command(EstateCommand::GitStatus { path: path.into() })
+			.await
+	}
+	pub async fn git_diff(&mut self, path: impl Into<String>) -> anyhow::Result<EstateCommandResult> {
+		self
+			.run_command(EstateCommand::GitDiff { path: path.into() })
+			.await
+	}
+	pub async fn git_log(&mut self, path: impl Into<String>) -> anyhow::Result<EstateCommandResult> {
+		self
+			.run_command(EstateCommand::GitLog { path: path.into() })
+			.await
+	}
+	pub async fn git_show(
+		&mut self,
+		revision: impl Into<String>,
+		path: Option<String>,
+	) -> anyhow::Result<EstateCommandResult> {
+		self
+			.run_command(EstateCommand::GitShow {
+				revision: revision.into(),
+				path,
+			})
+			.await
+	}
 }
-
 impl EstateConnection {
 	pub fn connection_id(&self) -> uuid::Uuid {
 		self.ack.connection_id
@@ -89,8 +95,6 @@ impl EstateConnection {
 	// ─────────────────────────────────────────────
 	async fn send(&mut self, message: IpcMessage<EventKind>) -> anyhow::Result<()> {
 		let json = serde_json::to_string(&message)?;
-		println!("🔥 ESTATE CLIENT → SEND: {:?}", json);
-		println!("🔥 ESTATE CLIENT → BYTES: {:?}", json.as_bytes());
 		self.writer.write_all(json.as_bytes()).await?;
 		self.writer.write_all(b"\n").await?;
 		self.writer.flush().await?;
@@ -127,10 +131,8 @@ impl EstateConnection {
 	// Estate Context
 	// ─────────────────────────────────────────────
 	pub async fn context(&mut self) -> anyhow::Result<EstateContext> {
-		println!("🔥 ESTATE CLIENT → GET CONTEXT");
 		self.send(IpcMessage::GetContext).await?;
 		let message = self.receive().await?;
-		println!("🔥 ESTATE CLIENT ← CONTEXT: {message:?}");
 		match message {
 			IpcMessage::ContextResult(context) => Ok(context),
 			IpcMessage::Error(error) => {
@@ -141,7 +143,6 @@ impl EstateConnection {
 			}
 		}
 	}
-
 	// ─────────────────────────────────────────────
 	// Filesystem
 	// ─────────────────────────────────────────────
@@ -149,7 +150,6 @@ impl EstateConnection {
 		&mut self,
 		path: String,
 	) -> anyhow::Result<Vec<FileEntry>> {
-		println!("🔥 ESTATE CLIENT → FS LIST: {path}");
 		self.send(IpcMessage::FsList { path }).await?;
 		loop {
 			let message = self.receive().await?;
@@ -157,13 +157,11 @@ impl EstateConnection {
 				IpcMessage::FsListResult { entries } => {
 					return Ok(entries);
 				}
-	
 				IpcMessage::Event(event) => {
 					// Don't return this as the fs_list result.
 					// The dedicated event bridge should handle UI events.
 					continue;
 				}
-	
 				IpcMessage::Error(error) => {
 					anyhow::bail!(
 						"Estate fs_list error {:?}: {}",
@@ -171,7 +169,6 @@ impl EstateConnection {
 						error.message
 					);
 				}
-	
 				other => {
 					anyhow::bail!(
 						"unexpected fs_list response: {other:?}"
@@ -208,38 +205,26 @@ impl EstateConnection {
 		}
 	}
 	pub async fn fs_update(&mut self, path: String, content: String) -> anyhow::Result<()> {
-		println!("🔥 ESTATE CLIENT → FS UPDATE: {path}");
-
 		self.send(IpcMessage::FsUpdate { path, content }).await?;
-
 		let message = self.receive().await?;
-
 		match message {
 			IpcMessage::FsUpdateResult => Ok(()),
-
 			IpcMessage::Error(error) => {
 				anyhow::bail!("Estate fs_update error {:?}: {}", error.code, error.message);
 			}
-
 			other => {
 				anyhow::bail!("unexpected fs_update response: {other:?}");
 			}
 		}
 	}
 	pub async fn fs_delete(&mut self, path: String) -> anyhow::Result<()> {
-		println!("🔥 ESTATE CLIENT → FS DELETE: {path}");
-
 		self.send(IpcMessage::FsDelete { path }).await?;
-
 		let message = self.receive().await?;
-
 		match message {
 			IpcMessage::FsDeleteResult => Ok(()),
-
 			IpcMessage::Error(error) => {
 				anyhow::bail!("Estate fs_delete error {:?}: {}", error.code, error.message);
 			}
-
 			other => {
 				anyhow::bail!("unexpected fs_delete response: {other:?}");
 			}
@@ -251,9 +236,7 @@ impl EstateConnection {
 		command: EstateCommand,
 	) -> anyhow::Result<EstateCommandResult> {
 		println!("🔥 ESTATE CLIENT → RUN COMMAND: {command:?}");
-
 		self.send(IpcMessage::RunCommand { command }).await?;
-
 		let message = self.receive().await?;
 
 		println!("🔥 ESTATE CLIENT ← COMMAND RESULT: {message:?}");
@@ -269,7 +252,24 @@ impl EstateConnection {
 		}
 	}
 }
-
+impl EstateConnection {
+	pub async fn curl(&mut self, url: impl Into<String>) -> anyhow::Result<EstateCommandResult> {
+		self
+			.run_command(EstateCommand::Curl { url: url.into() })
+			.await
+	}
+	pub async fn env(&mut self, name: Option<String>) -> anyhow::Result<EstateCommandResult> {
+		self.run_command(EstateCommand::Env { name }).await
+	}
+	pub async fn shell_pipeline(
+		&mut self,
+		commands: Vec<String>,
+	) -> anyhow::Result<EstateCommandResult> {
+		self
+			.run_command(EstateCommand::ShellPipeline { commands })
+			.await
+	}
+}
 impl EstateConnection {
 	pub async fn mkdir(&mut self, path: impl Into<String>) -> anyhow::Result<EstateCommandResult> {
 		self
@@ -439,53 +439,21 @@ impl EstateConnection {
 			.await
 	}
 }
-impl EstateConnection {
-	pub async fn git_status(
-		&mut self,
-		path: impl Into<String>,
-	) -> anyhow::Result<EstateCommandResult> {
-		self
-			.run_command(EstateCommand::GitStatus { path: path.into() })
-			.await
-	}
-	pub async fn git_diff(&mut self, path: impl Into<String>) -> anyhow::Result<EstateCommandResult> {
-		self
-			.run_command(EstateCommand::GitDiff { path: path.into() })
-			.await
-	}
-	pub async fn git_log(&mut self, path: impl Into<String>) -> anyhow::Result<EstateCommandResult> {
-		self
-			.run_command(EstateCommand::GitLog { path: path.into() })
-			.await
-	}
-	pub async fn git_show(
-		&mut self,
-		revision: impl Into<String>,
-		path: Option<String>,
-	) -> anyhow::Result<EstateCommandResult> {
-		self
-			.run_command(EstateCommand::GitShow {
-				revision: revision.into(),
-				path,
-			})
-			.await
-	}
+
+pub struct EstateConnection {
+	reader: BufReader<tokio::net::unix::OwnedReadHalf>,
+	writer: tokio::net::unix::OwnedWriteHalf,
+	ack: HelloAck,
 }
-impl EstateConnection {
-	pub async fn curl(&mut self, url: impl Into<String>) -> anyhow::Result<EstateCommandResult> {
-		self
-			.run_command(EstateCommand::Curl { url: url.into() })
-			.await
-	}
-	pub async fn env(&mut self, name: Option<String>) -> anyhow::Result<EstateCommandResult> {
-		self.run_command(EstateCommand::Env { name }).await
-	}
-	pub async fn shell_pipeline(
-		&mut self,
-		commands: Vec<String>,
-	) -> anyhow::Result<EstateCommandResult> {
-		self
-			.run_command(EstateCommand::ShellPipeline { commands })
-			.await
-	}
+
+// future in project (main●)
+// $ ls -l /tmp/estate.sock
+// srwxr-xr-x  1 future  wheel  0 Oct  4 17:28 /tmp/estate.sock
+//
+// future in project (main●)
+// $ file /tmp/estate.sock
+// /tmp/estate.sock: socket
+#[derive(Clone)]
+pub struct EstateClient {
+	socket: PathBuf,
 }
