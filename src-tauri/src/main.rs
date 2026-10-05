@@ -32,24 +32,22 @@ async fn main() {
 		.expect("error while running Tauri application");
 }
 fn start_estate_event_bridge(app: tauri::AppHandle) {
-  println!("🔥 ESTATE EVENT BRIDGE → STARTING");
-
-  tokio::spawn(async move {
-  		println!("🔥 ESTATE EVENT BRIDGE → connecting");
-
+	println!("🔥 ESTATE EVENT BRIDGE → STARTING");
+	tokio::spawn(async move {
+		println!("🔥 ESTATE EVENT BRIDGE → connecting");
 		let stream = match UnixStream::connect("/tmp/estate.sock").await {
 			Ok(stream) => stream,
-
 			Err(error) => {
 				eprintln!("🔥 ESTATE EVENT BRIDGE → connect failed: {error}");
 				return;
 			}
 		};
-
 		println!("🔥 ESTATE EVENT BRIDGE → connected");
-
 		let (reader, mut writer) = stream.into_split();
 		let mut reader = BufReader::new(reader);
+		// Keep the write half alive for the lifetime of this connection.
+		// The daemon treats EOF on the client read side as disconnect.
+		let _keepalive = &mut writer;
 		let mut line = String::new();
 
 		// Establish IPC connection.
@@ -92,10 +90,7 @@ fn start_estate_event_bridge(app: tauri::AppHandle) {
 			}
 
 			Ok(_) => {
-				println!(
-					"🔥 ESTATE EVENT BRIDGE ← {}",
-					line.trim_end()
-				);
+				println!("🔥 ESTATE EVENT BRIDGE ← {}", line.trim_end());
 			}
 
 			Err(error) => {
@@ -103,14 +98,14 @@ fn start_estate_event_bridge(app: tauri::AppHandle) {
 				return;
 			}
 		}
-
+		let _ = &writer;
 		// Long-lived event stream.
 		loop {
 			line.clear();
-
+		
 			let bytes = match reader.read_line(&mut line).await {
 				Ok(bytes) => bytes,
-
+		
 				Err(error) => {
 					eprintln!(
 						"🔥 ESTATE EVENT BRIDGE → read failed: {error}"
@@ -118,50 +113,39 @@ fn start_estate_event_bridge(app: tauri::AppHandle) {
 					return;
 				}
 			};
-
+		
 			if bytes == 0 {
 				println!("🔥 ESTATE EVENT BRIDGE → daemon disconnected");
 				return;
 			}
-
+		
 			let message: IpcMessage<estate_core::event::EventKind> =
 				match serde_json::from_str(line.trim_end()) {
 					Ok(message) => message,
 
 					Err(error) => {
-						eprintln!(
-							"🔥 ESTATE EVENT BRIDGE → decode failed: {error}"
-						);
+						eprintln!("🔥 ESTATE EVENT BRIDGE → decode failed: {error}");
 						continue;
 					}
 				};
 
 			match message {
 				IpcMessage::Event(envelope) => {
-					println!(
-						"🔥 ESTATE EVENT BRIDGE ← EVENT: {:?}",
-						envelope.event
-					);
+					println!("🔥 ESTATE EVENT BRIDGE ← EVENT: {:?}", envelope.event);
 
-					if let Err(error) =
-						app.emit("estate-event", &envelope)
-					{
-						eprintln!(
-							"🔥 ESTATE EVENT BRIDGE → emit failed: {error}"
-						);
+					if let Err(error) = app.emit("estate-event", &envelope) {
+						eprintln!("🔥 ESTATE EVENT BRIDGE → emit failed: {error}");
 					}
 				}
 
 				other => {
-					println!(
-						"🔥 ESTATE EVENT BRIDGE ← {:?}",
-						other
-					);
+					println!("🔥 ESTATE EVENT BRIDGE ← {:?}", other);
 				}
 			}
 		}
 	});
 }
+
 #[tauri::command]
 fn tauri_context() -> Result<TauriContext, String> {
 	Ok(TauriContext {

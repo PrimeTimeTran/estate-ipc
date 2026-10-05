@@ -23,7 +23,29 @@ type FileEntry = {
 	kind: 'file' | 'directory'
 	size?: number
 }
+type EstateEvent =
+	| {
+			kind: 'key_down'
+			key_code: number
+	  }
+	| {
+			kind: 'key_up'
+			key_code: number
+	  }
+	| {
+			kind: 'flags_changed'
+			key_code: number
+	  }
+	| {
+			kind: 'active_app_changed'
+			name: string
+			bundle_id: string
+			pid: number
+	  }
 
+type EstateEventEnvelope = {
+	event: EstateEvent
+}
 /* -------------------------------------------------------------------------- */
 /* Test paths                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -141,7 +163,6 @@ async function deleteFile(path: string) {
 	console.log('🔥 FRONTEND ← fs_delete OK')
 }
 
-
 /* -------------------------------------------------------------------------- */
 /* Estate events                                                              */
 /* -------------------------------------------------------------------------- */
@@ -149,16 +170,10 @@ async function deleteFile(path: string) {
 async function listenForEstateEvents() {
 	console.log('🔥 FRONTEND → listening for Estate events')
 
-	await listen('estate-event', (event) => {
+	await listen<EstateEventEnvelope>('estate-event', (event) => {
 		console.log('🔥 FRONTEND ← Estate event:', event.payload)
 
-		const envelope = event.payload as {
-			event?: {
-				kind?: string
-			}
-		}
-
-		console.log('🔥 EVENT ENVELOPE:', envelope)
+		handleEstateEvent(event.payload)
 	})
 }
 /* -------------------------------------------------------------------------- */
@@ -180,123 +195,123 @@ async function loadEverything() {
 
 	setStatus('Testing filesystem...')
 
-	/*
-	 * LIST
-	 */
-	const files = await listFiles(TEST_DIRECTORY)
-
-	setText(
-		'fs-list',
-		JSON.stringify(files, null, 2),
-	)
+	// 	/*
+	// 	 * LIST
+	// 	 */
+	// 	const files = await listFiles(TEST_DIRECTORY)
+	//
+	// 	setText(
+	// 		'fs-list',
+	// 		JSON.stringify(files, null, 2),
+	// 	)
 
 	/*
 	 * READ
 	 *
 	 * Only attempt this if the test file already exists.
 	 */
-	try {
-		const content = await readFile(TEST_FILE)
+	// 	try {
+	// 		const content = await readFile(TEST_FILE)
+	//
+	// 		setText('fs-read', content)
+	// 	} catch (error) {
+	// 		console.log('🔥 FS READ skipped:', error)
+	//
+	// 		setText(
+	// 			'fs-read',
+	// 			`File does not exist yet: ${TEST_FILE}`,
+	// 		)
+	// 	}
 
-		setText('fs-read', content)
-	} catch (error) {
-		console.log('🔥 FS READ skipped:', error)
-
-		setText(
-			'fs-read',
-			`File does not exist yet: ${TEST_FILE}`,
-		)
-	}
-
-	/*
-	 * CREATE
-	 */
-	try {
-		await createFile(
-			TEST_FILE,
-			'hello from Tauri → Estate',
-		)
-
-		setText(
-			'fs-create',
-			'✓ create succeeded',
-		)
-	} catch (error) {
-		console.error('🔥 FS CREATE ERROR:', error)
-
-		setText(
-			'fs-create',
-			`✗ ${String(error)}`,
-		)
-	}
-
-	/*
-	 * READ AGAIN
-	 */
-	try {
-		const content = await readFile(TEST_FILE)
-
-		setText('fs-read', content)
-	} catch (error) {
-		console.error('🔥 FS READ ERROR:', error)
-
-		setText(
-			'fs-read',
-			`✗ ${String(error)}`,
-		)
-	}
-
-	/*
-	 * UPDATE
-	 */
-	try {
-		await updateFile(
-			TEST_FILE,
-			'updated from Tauri → Estate',
-		)
-
-		setText(
-			'fs-update',
-			'✓ update succeeded',
-		)
-	} catch (error) {
-		console.error('🔥 FS UPDATE ERROR:', error)
-
-		setText(
-			'fs-update',
-			`✗ ${String(error)}`,
-		)
-	}
-
-	/*
-	 * READ AFTER UPDATE
-	 */
-	try {
-		const content = await readFile(TEST_FILE)
-
-		setText('fs-read', content)
-	} catch (error) {
-		console.error('🔥 FS READ AFTER UPDATE ERROR:', error)
-	}
-
-	/*
-	 * DELETE
-	 */
-	try {
-		await deleteFile(TEST_FILE)
-
-		setText(
-			'fs-delete',
-			'✓ delete succeeded',
-		)
-	} catch (error) {
-		console.error('🔥 FS DELETE ERROR:', error)
-
-		setText(
-			'fs-delete',
-			`✗ ${String(error)}`,
-		)
-	}
+	// 	/*
+	// 	 * CREATE
+	// 	 */
+	// 	try {
+	// 		await createFile(
+	// 			TEST_FILE,
+	// 			'hello from Tauri → Estate',
+	// 		)
+	//
+	// 		setText(
+	// 			'fs-create',
+	// 			'✓ create succeeded',
+	// 		)
+	// 	} catch (error) {
+	// 		console.error('🔥 FS CREATE ERROR:', error)
+	//
+	// 		setText(
+	// 			'fs-create',
+	// 			`✗ ${String(error)}`,
+	// 		)
+	// 	}
+	//
+	// 	/*
+	// 	 * READ AGAIN
+	// 	 */
+	// 	try {
+	// 		const content = await readFile(TEST_FILE)
+	//
+	// 		setText('fs-read', content)
+	// 	} catch (error) {
+	// 		console.error('🔥 FS READ ERROR:', error)
+	//
+	// 		setText(
+	// 			'fs-read',
+	// 			`✗ ${String(error)}`,
+	// 		)
+	// 	}
+	//
+	// 	/*
+	// 	 * UPDATE
+	// 	 */
+	// 	try {
+	// 		await updateFile(
+	// 			TEST_FILE,
+	// 			'updated from Tauri → Estate',
+	// 		)
+	//
+	// 		setText(
+	// 			'fs-update',
+	// 			'✓ update succeeded',
+	// 		)
+	// 	} catch (error) {
+	// 		console.error('🔥 FS UPDATE ERROR:', error)
+	//
+	// 		setText(
+	// 			'fs-update',
+	// 			`✗ ${String(error)}`,
+	// 		)
+	// 	}
+	//
+	// 	/*
+	// 	 * READ AFTER UPDATE
+	// 	 */
+	// 	try {
+	// 		const content = await readFile(TEST_FILE)
+	//
+	// 		setText('fs-read', content)
+	// 	} catch (error) {
+	// 		console.error('🔥 FS READ AFTER UPDATE ERROR:', error)
+	// 	}
+	//
+	// 	/*
+	// 	 * DELETE
+	// 	 */
+	// 	try {
+	// 		await deleteFile(TEST_FILE)
+	//
+	// 		setText(
+	// 			'fs-delete',
+	// 			'✓ delete succeeded',
+	// 		)
+	// 	} catch (error) {
+	// 		console.error('🔥 FS DELETE ERROR:', error)
+	//
+	// 		setText(
+	// 			'fs-delete',
+	// 			`✗ ${String(error)}`,
+	// 		)
+	// 	}
 
 	setStatus('✓ All Estate IPC tests completed')
 
@@ -304,7 +319,41 @@ async function loadEverything() {
 	console.log('🔥 FRONTEND INITIALIZATION COMPLETE')
 	console.log('🔥 ========================================')
 }
+function handleEstateEvent(envelope: EstateEventEnvelope) {
+	const event = envelope.event
 
+	console.log('🔥 UI EVENT:', event)
+	if ('ActiveAppChanged' in event) {
+		const app = event.ActiveAppChanged
+		setText('active-app', app.name)
+		setText('last-event', `ACTIVE APP — ${app.name}`)
+		console.log('🔥 Active app:', app.name, app.bundle_id, app.pid)
+		return
+	}
+
+	switch (event.kind) {
+		case 'key_down':
+			setText('last-event', `KEY DOWN — code ${event.key_code}`)
+			break
+
+		case 'key_up':
+			setText('last-event', `KEY UP — code ${event.key_code}`)
+			break
+
+		case 'flags_changed':
+			setText('last-event', `FLAGS CHANGED — code ${event.key_code}`)
+			break
+
+		case 'active_app_changed':
+			setText('active-app', event.name)
+
+			setText('last-event', `ACTIVE APP — ${event.name}`)
+
+			console.log('🔥 Active app:', event.name, event.bundle_id, event.pid)
+
+			break
+	}
+}
 /* -------------------------------------------------------------------------- */
 /* Startup                                                                    */
 /* -------------------------------------------------------------------------- */
@@ -312,17 +361,12 @@ async function loadEverything() {
 window.addEventListener('DOMContentLoaded', async () => {
 	console.log('🔥 FRONTEND READY')
 
-  try {
+	try {
 		await listenForEstateEvents()
 		await loadEverything()
 	} catch (error) {
-		console.error(
-			'🔥 FRONTEND INITIALIZATION FAILED:',
-			error,
-		)
+		console.error('🔥 FRONTEND INITIALIZATION FAILED:', error)
 
-		setStatus(
-			`Initialization failed: ${String(error)}`,
-		)
+		setStatus(`Initialization failed: ${String(error)}`)
 	}
 })
