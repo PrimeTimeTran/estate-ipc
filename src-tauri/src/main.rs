@@ -32,6 +32,7 @@ fn main() {
 					UiMode::Rail => create_rail_window(app)?,
 					UiMode::Palette => create_palette_window(app)?,
 					UiMode::Settings => create_search_window(app)?,
+					UiMode::React => create_react_window(app)?,
 				}
 				Ok(())
 			})
@@ -124,7 +125,18 @@ fn create_palette_window(app: &mut tauri::App) -> tauri::Result<()> {
 		.build()?;
 	Ok(())
 }
+fn create_react_window(app: &mut tauri::App) -> tauri::Result<()> {
+	WebviewWindowBuilder::new(
+		app,
+		"main",
+		WebviewUrl::App("react.html".into()),
+	)
+		.title("Estate")
+		.maximized(true)
+		.build()?;
 
+	Ok(())
+}
 #[derive(Debug, Clone, Copy)]
 enum UiMode {
 	Main,
@@ -132,6 +144,7 @@ enum UiMode {
 	Settings,
 	Rail,
 	Palette,
+	React
 }
 
 impl UiMode {
@@ -144,6 +157,7 @@ impl UiMode {
 			Some("--search") => Self::Search,
 			Some("--settings") => Self::Settings,
 			Some("--palette") => Self::Palette,
+			Some("--react") => Self::React,
 			_ => Self::DEFAULT,
 		}
 	}
