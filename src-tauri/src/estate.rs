@@ -1,6 +1,7 @@
 use std::{path::PathBuf, process};
 
 use estate_core::{
+	data::ESTATE_SOCKET,
 	estate_ipc::{
 		ClientKind, EstateCommand, EstateCommandResult, EstateContext, FileEntry, Hello, HelloAck,
 		IpcMessage, ProtocolVersion,
@@ -20,7 +21,6 @@ use tokio::{
 // future in project (main●)
 // $ file /tmp/estate.sock
 // /tmp/estate.sock: socket
-pub const ESTATE_IPC_SOCKET: &str = "/tmp/estate.sock";
 
 #[derive(Clone)]
 pub struct EstateClient {
@@ -30,19 +30,15 @@ pub struct EstateClient {
 impl EstateClient {
 	pub fn new() -> Self {
 		Self {
-			socket: PathBuf::from(ESTATE_IPC_SOCKET),
+			socket: PathBuf::from(ESTATE_SOCKET),
 		}
 	}
 
 	pub async fn connect(&self) -> anyhow::Result<EstateConnection> {
 		println!("🔥 ESTATE CLIENT connecting to {:?}", self.socket);
-
 		let stream = UnixStream::connect(&self.socket).await?;
-
 		println!("🔥 ESTATE CLIENT socket connected");
-
 		let (read_half, mut write_half) = stream.into_split();
-
 		let hello = IpcMessage::<EventKind>::Hello(Hello {
 			protocol: ProtocolVersion::CURRENT,
 			client: ClientKind::Tauri,
@@ -50,26 +46,17 @@ impl EstateClient {
 		});
 
 		let json = serde_json::to_string(&hello)?;
-
 		println!("🔥 ESTATE CLIENT → HELLO: {json}");
-
 		write_half.write_all(json.as_bytes()).await?;
 		write_half.write_all(b"\n").await?;
 		write_half.flush().await?;
-
 		println!("🔥 ESTATE CLIENT ← waiting for HelloAck");
-
 		let mut reader = BufReader::new(read_half);
 		let mut line = String::new();
-
 		reader.read_line(&mut line).await?;
-
 		println!("🔥 ESTATE CLIENT ← HELLO ACK: {line:?}");
-
 		let message: IpcMessage<EventKind> = serde_json::from_str(&line)?;
-
 		let ack = match message {
-
 			IpcMessage::HelloAck(ack) => ack,
 			IpcMessage::Error(error) => {
 				anyhow::bail!("Estate IPC error {:?}: {}", error.code, error.message);
@@ -102,28 +89,20 @@ impl EstateConnection {
 	// ─────────────────────────────────────────────
 	async fn send(&mut self, message: IpcMessage<EventKind>) -> anyhow::Result<()> {
 		let json = serde_json::to_string(&message)?;
-
 		println!("🔥 ESTATE CLIENT → SEND: {:?}", json);
-
 		println!("🔥 ESTATE CLIENT → BYTES: {:?}", json.as_bytes());
-
 		self.writer.write_all(json.as_bytes()).await?;
 		self.writer.write_all(b"\n").await?;
 		self.writer.flush().await?;
-
 		Ok(())
 	}
 	async fn receive(&mut self) -> anyhow::Result<IpcMessage<EventKind>> {
 		let mut line = String::new();
-
 		let bytes = self.reader.read_line(&mut line).await?;
-
 		if bytes == 0 {
 			anyhow::bail!("Estate IPC connection closed");
 		}
-
 		let message = serde_json::from_str::<IpcMessage<EventKind>>(&line)?;
-
 		Ok(message)
 	}
 
@@ -132,16 +111,12 @@ impl EstateConnection {
 	// ─────────────────────────────────────────────
 	pub async fn ping(&mut self, id: u64) -> anyhow::Result<()> {
 		self.send(IpcMessage::Ping { id }).await?;
-
 		let message = self.receive().await?;
-
 		match message {
 			IpcMessage::Pong { id: response_id } if response_id == id => Ok(()),
-
 			IpcMessage::Error(error) => {
 				anyhow::bail!("Estate IPC error {:?}: {}", error.code, error.message);
 			}
-
 			other => {
 				anyhow::bail!("unexpected ping response: {other:?}");
 			}
@@ -153,20 +128,14 @@ impl EstateConnection {
 	// ─────────────────────────────────────────────
 	pub async fn context(&mut self) -> anyhow::Result<EstateContext> {
 		println!("🔥 ESTATE CLIENT → GET CONTEXT");
-
 		self.send(IpcMessage::GetContext).await?;
-
 		let message = self.receive().await?;
-
 		println!("🔥 ESTATE CLIENT ← CONTEXT: {message:?}");
-
 		match message {
 			IpcMessage::ContextResult(context) => Ok(context),
-
 			IpcMessage::Error(error) => {
 				anyhow::bail!("Estate context error {:?}: {}", error.code, error.message);
 			}
-
 			other => {
 				anyhow::bail!("unexpected context response: {other:?}");
 			}
@@ -181,23 +150,15 @@ impl EstateConnection {
 		path: String,
 	) -> anyhow::Result<Vec<FileEntry>> {
 		println!("🔥 ESTATE CLIENT → FS LIST: {path}");
-	
 		self.send(IpcMessage::FsList { path }).await?;
-	
 		loop {
 			let message = self.receive().await?;
-	
 			match message {
 				IpcMessage::FsListResult { entries } => {
 					return Ok(entries);
 				}
 	
 				IpcMessage::Event(event) => {
-					println!(
-						"🔥 ESTATE CLIENT ← EVENT WHILE WAITING: {:?}",
-						event.event
-					);
-	
 					// Don't return this as the fs_list result.
 					// The dedicated event bridge should handle UI events.
 					continue;
@@ -220,15 +181,10 @@ impl EstateConnection {
 		}
 	}
 	pub async fn fs_read(&mut self, path: String) -> anyhow::Result<String> {
-		println!("🔥 ESTATE CLIENT → FS READ: {path}");
-
 		self.send(IpcMessage::FsRead { path }).await?;
-
 		let message = self.receive().await?;
-
 		match message {
 			IpcMessage::FsReadResult { content } => Ok(content),
-
 			IpcMessage::Error(error) => {
 				anyhow::bail!("Estate fs_read error {:?}: {}", error.code, error.message);
 			}
@@ -239,19 +195,13 @@ impl EstateConnection {
 		}
 	}
 	pub async fn fs_create(&mut self, path: String, content: String) -> anyhow::Result<()> {
-		println!("🔥 ESTATE CLIENT → FS CREATE: {path}");
-
 		self.send(IpcMessage::FsCreate { path, content }).await?;
-
 		let message = self.receive().await?;
-
 		match message {
 			IpcMessage::FsCreateResult => Ok(()),
-
 			IpcMessage::Error(error) => {
 				anyhow::bail!("Estate fs_create error {:?}: {}", error.code, error.message);
 			}
-
 			other => {
 				anyhow::bail!("unexpected fs_create response: {other:?}");
 			}

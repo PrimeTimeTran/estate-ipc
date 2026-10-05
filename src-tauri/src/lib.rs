@@ -7,7 +7,7 @@ pub struct ProtocolVersion {
 	pub minor: u16,
 }
 
-impl ProtocolVersion {
+impl ProtocolVersion { 
 	pub const CURRENT: Self = Self {
 		major: 1,
 		minor: 0,

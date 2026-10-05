@@ -13,9 +13,7 @@ async fn main() {
 		.manage(estate)
 		.setup(|app| {
 			println!("🔥 TAURI → starting Estate event bridge");
-
 			start_estate_event_bridge(app.handle().clone());
-
 			Ok(())
 		})
 		.invoke_handler(tauri::generate_handler![
