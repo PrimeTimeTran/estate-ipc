@@ -30,6 +30,7 @@ tauri = { version = "2", features = [] }
 tokio = "1.53.2"
 uuid = { version = "1.26.1", features = ["v4"] }
 estate = { package = "estate", path = "../../../.." }
+cocoa = "0.27.0"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
