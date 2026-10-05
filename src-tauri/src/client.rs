@@ -7,7 +7,7 @@ use tokio::{
 use estate::{
 	EventKind,
 	data::ESTATE_SOCKET,
-	estate_ipc::{
+	ipc::{
 		ClientKind, EstateCommand, EstateCommandResult, EstateContext, FileEntry, Hello, HelloAck,
 		IpcMessage, ProtocolVersion,
 	},
@@ -28,7 +28,6 @@ impl EstateClient {
 			client: ClientKind::Tauri,
 			pid: process::id(),
 		});
-
 		let json = serde_json::to_string(&hello)?;
 		write_half.write_all(json.as_bytes()).await?;
 		write_half.write_all(b"\n").await?;
@@ -147,7 +146,7 @@ impl EstateConnection {
 }
 impl EstateConnection {
 	// ─────────────────────────────────────────────
-	
+
 	// Filesystem
 	// ─────────────────────────────────────────────
 	pub async fn fs_list(&mut self, path: String) -> anyhow::Result<Vec<FileEntry>> {
