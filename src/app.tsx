@@ -2,11 +2,57 @@ import { useState } from 'react'
 import './styles-react.css'
 
 type NavigationFocusScope = 'topTabs' | 'sidebar' | 'search' | 'content'
+
 type SearchResult = {
 	id: string
 	title: string
 	description?: string
+
 	type: string
+	extension?: string
+
+	path?: string
+	app?: string
+	workspace?: string
+
+	size?: number
+	modified?: number
+}
+type SearchFilter = {
+	id: string
+	field:
+		| 'type'
+		| 'extension'
+		| 'path'
+		| 'app'
+		| 'workspace'
+	value: string
+	label: string
+}
+type SearchSort = {
+	field:
+		| 'relevance'
+		| 'name'
+		| 'path'
+		| 'modified'
+		| 'size'
+	direction: 'asc' | 'desc'
+}
+type SearchState = {
+	query: string
+	history: string[]
+
+	results: SearchResult[]
+	selected: string | null
+
+	filters: SearchFilter[]
+	sort: SearchSort
+
+	focusedDimension:
+		| 'query'
+		| 'filters'
+		| 'sort'
+		| 'results'
 }
 type EstateNavigationState = {
 	ui: {
@@ -42,12 +88,7 @@ type EstateNavigationState = {
 		collapsed: boolean
 	}
 
-	search: {
-		query: string
-		history: string[]
-		selected: string | null
-		results: SearchResult[]
-	}
+	search: SearchState
 
 	actions: {
 		history: Array<{
@@ -68,58 +109,77 @@ type NavigationProps = {
 	state: EstateNavigationState
 	setState: React.Dispatch<React.SetStateAction<EstateNavigationState>>
 }
-
-const initialNavigationState: EstateNavigationState = {
-	ui: {
-		topTabs: true,
-		sidebar: true,
-		searchBar: true,
-	},
-
-	current: {
-		tab: 'home',
-		route: '/',
-		query: '',
-	},
-
-	focus: {
-		scope: 'content',
-		topTabs: 'home',
-		sidebar: 'home',
-		search: null,
-	},
-
-	tabs: {
-		open: ['home', 'files', 'projects'],
-
-		active: 'home',
-
-		history: {
-			back: [],
-			forward: [],
-		},
-	},
-
-	sidebar: {
-		active: 'home',
-		collapsed: false,
-	},
-
-	search: {
-		query: '',
-		history: [],
-		selected: null,
-		results: [],
-	},
-
-	actions: {
-		history: [],
-	},
-
-	settings: {
-		maxHistory: 100,
-		maxSearchHistory: 50,
-	},
+type NavigationNode =
+	| {
+			type: 'tab'
+			id: string
+			label: string
+	  }
+	| {
+			type: 'navigation'
+			id: string
+			label: string
+	  }
+	| {
+			type: 'action'
+			id: string
+			label: string
+	  }
+			const initialNavigationState: EstateNavigationState = {
+				ui: {
+					topTabs: true,
+					sidebar: true,
+					searchBar: true,
+				},
+			
+				current: {
+					tab: 'home',
+					route: '/',
+					query: '',
+				},
+			
+				focus: {
+					scope: 'content',
+					topTabs: 'home',
+					sidebar: 'home',
+					search: null,
+				},
+			
+				tabs: {
+					open: ['home', 'workspace', 'project', 'term', 'symbol', 'actions'],
+					active: 'home',
+					history: {
+						back: [],
+						forward: [],
+					},
+				},
+			
+				sidebar: {
+					active: 'home',
+					collapsed: false,
+				},
+			
+				search: {
+					query: '',
+					history: [],
+					results: [],
+					selected: null,
+					filters: [],
+					sort: {
+						field: 'relevance',
+						direction: 'desc',
+					},
+					focusedDimension: 'query',
+				},
+			
+				actions: {
+					history: [],
+				},
+			
+				settings: {
+					maxHistory: 100,
+					maxSearchHistory: 50,
+				},
 }
 export default function App() {
 	const [navigation, setNavigation] = useState<EstateNavigationState>(
@@ -525,24 +585,26 @@ function SidebarNavigation({ state, setState }: NavigationProps) {
 							{/* ACTIVE INDICATOR */}
 							{active && (
 								<span
-									className={[
-										'absolute left-0 top-1.5',
-										'h-6 w-0.5',
-										'rounded-full',
-										'bg-primary',
-									].join(' ')}
+									className="
+										pointer-events-none
+										absolute bottom-1 left-0 top-1
+										w-1
+										rounded-r-full
+										bg-primary
+									"
 								/>
 							)}
 
 							{/* FOCUS INDICATOR */}
 							{isFocused && (
 								<span
-									className={[
-										'absolute left-0 top-1',
-										'h-7 w-0.5',
-										'rounded-full',
-										'bg-primary/70',
-									].join(' ')}
+									className="
+										pointer-events-none
+										absolute bottom-0 left-0 top-0
+										w-0.5
+										rounded-r-full
+										bg-primary/70
+									"
 								/>
 							)}
 
@@ -582,66 +644,42 @@ function SearchBar({ state, setState }: NavigationProps) {
 
 	function search(query: string) {
 		const trimmed = query.trim()
-
+	
 		if (!trimmed) {
 			return
 		}
-
-		/*
-		 * Temporary fake search results.
-		 *
-		 * Replace this with your Estate search command later.
-		 */
-		const results: SearchResult[] = [
-			{
-				id: 'estate-project',
-				title: 'Estate Project',
-				description: 'Main Estate workspace',
-				type: 'Project',
-			},
-			{
-				id: 'keyboard',
-				title: 'Keyboard Events',
-				description: 'macOS native keyboard event observer',
-				type: 'Document',
-			},
-			{
-				id: 'settings',
-				title: 'Estate Settings',
-				description: 'Application and workspace settings',
-				type: 'Settings',
-			},
-		].filter((result) =>
-			`${result.title} ${result.description ?? ''}`
-				.toLowerCase()
-				.includes(trimmed.toLowerCase()),
-		)
-
+	
+		const normalized = trimmed.toLowerCase()
+	
+		const results = mockSearchResults(trimmed)
+	
 		setState((current) => ({
 			...current,
-
+	
 			current: {
 				...current.current,
 				query: trimmed,
 			},
-
+	
 			focus: {
 				...current.focus,
 				scope: 'search',
 				search: results.length > 0 ? 'results' : 'input',
 			},
-
+	
 			search: {
 				...current.search,
 				query: trimmed,
 				results,
 				selected: results[0]?.id ?? null,
+				focusedDimension: results.length > 0 ? 'results' : 'query',
+	
 				history: [
 					trimmed,
 					...current.search.history.filter((item) => item !== trimmed),
 				].slice(0, current.settings.maxSearchHistory),
 			},
-
+	
 			actions: {
 				history: [
 					...current.actions.history,
@@ -658,7 +696,6 @@ function SearchBar({ state, setState }: NavigationProps) {
 			},
 		}))
 	}
-
 	function selectResult(result: SearchResult) {
 		setState((current) => ({
 			...current,
@@ -763,6 +800,7 @@ function SearchBar({ state, setState }: NavigationProps) {
 								query: event.target.value,
 								selected: null,
 								results: [],
+								focusedDimension: 'query',
 							},
 							focus: {
 								...current.focus,
@@ -842,10 +880,44 @@ function SearchResults({
 }: NavigationProps & {
 	onSelect: (result: SearchResult) => void
 }) {
+	function formatSize(size?: number) {
+		if (size === undefined) {
+			return ''
+		}
+
+		if (size < 1024) {
+			return `${size} B`
+		}
+
+		if (size < 1024 * 1024) {
+			return `${(size / 1024).toFixed(1)} KB`
+		}
+
+		return `${(size / (1024 * 1024)).toFixed(1)} MB`
+	}
+
+	function formatModified(timestamp?: number) {
+		if (timestamp === undefined) {
+			return ''
+		}
+
+		return new Date(timestamp).toLocaleDateString(undefined, {
+			month: 'short',
+			day: 'numeric',
+		})
+	}
+
 	return (
 		<div className="max-h-80 overflow-y-auto p-2">
-			<div className="px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-on-surface/30">
-				Results
+			<div className="flex items-center justify-between px-2 py-2">
+				<div className="text-[10px] font-semibold uppercase tracking-wider text-on-surface/30">
+					Results
+				</div>
+
+				<div className="text-[10px] text-on-surface/25">
+					{state.search.results.length}{' '}
+					{state.search.results.length === 1 ? 'result' : 'results'}
+				</div>
 			</div>
 
 			{state.search.results.map((result) => {
@@ -858,31 +930,75 @@ function SearchResults({
 						onMouseDown={(event) => event.preventDefault()}
 						onClick={() => onSelect(result)}
 						className={[
-							'flex w-full items-center gap-3',
+							'group flex w-full items-center gap-3',
 							'rounded-lg px-3 py-2.5',
 							'text-left outline-none',
 							'transition',
 
-							selected ? 'bg-primary/10' : 'hover:bg-surface-container',
+							selected
+								? 'bg-primary/10'
+								: 'hover:bg-surface-container',
 						].join(' ')}
 					>
-						<div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-surface-container text-xs text-on-surface/40">
-							{result.type[0]}
+						{/* File type */}
+						<div
+							className={[
+								'flex h-8 w-8 shrink-0 items-center justify-center',
+								'rounded-md bg-surface-container',
+								'text-xs font-medium uppercase',
+								selected
+									? 'text-primary'
+									: 'text-on-surface/40',
+							].join(' ')}
+						>
+							{result.extension?.replace('.', '') ||
+								result.type[0]}
 						</div>
 
+						{/* Main result information */}
 						<div className="min-w-0 flex-1">
-							<div className="truncate text-sm text-on-surface">
+							<div
+								className={[
+									'truncate text-sm',
+									selected
+										? 'text-on-background'
+										: 'text-on-surface',
+								].join(' ')}
+							>
 								{result.title}
 							</div>
 
-							{result.description && (
+							{result.path && (
+								<div className="truncate text-xs text-on-surface/35">
+									{result.path}
+								</div>
+							)}
+
+							{result.description && !result.path && (
 								<div className="truncate text-xs text-on-surface/35">
 									{result.description}
 								</div>
 							)}
 						</div>
 
-						<div className="text-[10px] text-on-surface/25">{result.type}</div>
+						{/* Metadata */}
+						<div className="flex shrink-0 items-center gap-3">
+							{result.size !== undefined && (
+								<span className="text-[10px] tabular-nums text-on-surface/25">
+									{formatSize(result.size)}
+								</span>
+							)}
+
+							{result.modified !== undefined && (
+								<span className="text-[10px] tabular-nums text-on-surface/25">
+									{formatModified(result.modified)}
+								</span>
+							)}
+
+							<span className="text-[10px] text-on-surface/25">
+								{result.type}
+							</span>
+						</div>
 					</button>
 				)
 			})}
@@ -983,248 +1099,198 @@ function goForward(
 		}
 	})
 }
+export type MockFile = {
+	id: string
+	name: string
+	path: string
+	type: 'file'
+	extension: string
+	app: string
+	workspace: string
+	size: number
+	modified: number
+	description?: string
+}
 
-// function TopTabNavigation({
-// 	state,
-// 	setState,
-// }: NavigationProps) {
-// 	function selectTab(tab: string) {
-// 		if (tab === state.tabs.active) {
-// 			return;
-// 		}
-//
-// 		setState((current) => ({
-// 			...current,
-//
-// 			current: {
-// 				...current.current,
-// 				tab,
-// 			},
-//
-// 			tabs: {
-// 				...current.tabs,
-//
-// 				active: tab,
-//
-// 				history: {
-// 					back: [
-// 						...current.tabs.history.back,
-// 						current.tabs.active,
-// 					],
-// 					forward: [],
-// 				},
-// 			},
-//
-// 			actions: {
-// 				history: [
-// 					...current.actions.history,
-// 					{
-// 						id: crypto.randomUUID(),
-// 						type: "navigation",
-// 						name: "tab.select",
-// 						timestamp: Date.now(),
-// 						payload: { tab },
-// 					},
-// 				],
-// 			},
-// 		}));
-// 	}
-//
-// 	return (
-// 		<nav className="flex h-11 shrink-0 items-end border-b border-outline/10 bg-surface">
-// 			{state.tabs.open.map((tab) => (
-// 				<button
-// 					key={tab}
-// 					onClick={() => selectTab(tab)}
-// 					className={[
-// 						"h-10 px-4 text-sm transition",
-// 						state.tabs.active === tab
-// 							? "border-b-2 border-primary bg-surface-container text-on-surface"
-// 							: "text-on-surface/50 hover:bg-surface-container/50 hover:text-on-surface",
-// 					].join(" ")}
-// 				>
-// 					{tab}
-// 				</button>
-// 			))}
-// 		</nav>
-// 	);
-// }
-// function SidebarNavigation({
-// 	state,
-// 	setState,
-// }: NavigationProps) {
-// 	const items = [
-// 		{ id: "home", label: "Home" },
-// 		{ id: "files", label: "Files" },
-// 		{ id: "projects", label: "Projects" },
-// 		{ id: "history", label: "History" },
-// 		{ id: "settings", label: "Settings" },
-// 	];
-//
-// 	function select(item: string) {
-// 		setState((current) => ({
-// 			...current,
-//
-// 			sidebar: {
-// 				...current.sidebar,
-// 				active: item,
-// 			},
-//
-// 			current: {
-// 				...current.current,
-// 				route: `/${item}`,
-// 			},
-//
-// 			actions: {
-// 				history: [
-// 					...current.actions.history,
-// 					{
-// 						id: crypto.randomUUID(),
-// 						type: "navigation",
-// 						name: "sidebar.select",
-// 						timestamp: Date.now(),
-// 						payload: { item },
-// 					},
-// 				],
-// 			},
-// 		}));
-// 	}
-//
-// 	if (state.sidebar.collapsed) {
-// 		return (
-// 			<aside className="w-12 shrink-0 border-r border-outline/10 bg-surface">
-// 				<button
-// 					onClick={() =>
-// 						setState((current) => ({
-// 							...current,
-// 							sidebar: {
-// 								...current.sidebar,
-// 								collapsed: false,
-// 							},
-// 						}))
-// 					}
-// 					className="m-2 h-8 w-8 rounded-md hover:bg-surface-container"
-// 				>
-// 					›
-// 				</button>
-// 			</aside>
-// 		);
-// 	}
-//
-// 	return (
-// 		<aside className="w-56 shrink-0 border-r border-outline/10 bg-surface">
-// 			<div className="flex h-full flex-col p-2">
-// 				{items.map((item) => (
-// 					<button
-// 						key={item.id}
-// 						onClick={() => select(item.id)}
-// 						className={[
-// 							"rounded-md px-3 py-2 text-left text-sm",
-// 							state.sidebar.active === item.id
-// 								? "bg-surface-container text-on-surface"
-// 								: "text-on-surface/50 hover:bg-surface-container/50",
-// 						].join(" ")}
-// 					>
-// 						{item.label}
-// 					</button>
-// 				))}
-//
-// 				<button
-// 					onClick={() =>
-// 						setState((current) => ({
-// 							...current,
-// 							sidebar: {
-// 								...current.sidebar,
-// 								collapsed: true,
-// 							},
-// 						}))
-// 					}
-// 					className="mt-auto rounded-md px-3 py-2 text-left text-sm text-on-surface/40 hover:bg-surface-container"
-// 				>
-// 					Collapse
-// 				</button>
-// 			</div>
-// 		</aside>
-// 	);
-// }
-// function SearchBar({
-// 	state,
-// 	setState,
-// }: NavigationProps) {
-// 	function search(query: string) {
-// 		const trimmed = query.trim();
-//
-// 		if (!trimmed) {
-// 			return;
-// 		}
-//
-// 		setState((current) => ({
-// 			...current,
-//
-// 			current: {
-// 				...current.current,
-// 				query: trimmed,
-// 			},
-//
-// 			search: {
-// 				...current.search,
-// 				query: trimmed,
-// 				history: [
-// 					trimmed,
-// 					...current.search.history.filter(
-// 						(item) => item !== trimmed,
-// 					),
-// 				].slice(0, current.settings.maxSearchHistory),
-// 			},
-//
-// 			actions: {
-// 				history: [
-// 					...current.actions.history,
-// 					{
-// 						id: crypto.randomUUID(),
-// 						type: "search",
-// 						name: "search.execute",
-// 						timestamp: Date.now(),
-// 						payload: {
-// 							query: trimmed,
-// 						},
-// 					},
-// 				],
-// 			},
-// 		}));
-// 	}
-//
-// 	return (
-// 		<div className="flex h-14 shrink-0 items-center border-b border-outline/10 px-4">
-// 			<div className="flex h-9 flex-1 items-center rounded-lg border border-outline/15 bg-surface-container px-3">
-// 				<span className="mr-3 text-on-surface/40">
-// 					⌕
-// 				</span>
-//
-// 				<input
-// 					value={state.search.query}
-// 					onChange={(event) =>
-// 						setState((current) => ({
-// 							...current,
-// 							search: {
-// 								...current.search,
-// 								query: event.target.value,
-// 							},
-// 						}))
-// 					}
-// 					onKeyDown={(event) => {
-// 						if (event.key === "Enter") {
-// 							search(state.search.query);
-// 						}
-// 					}}
-// 					placeholder="Search Estate..."
-// 					className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-on-surface/30"
-// 				/>
-//
-// 				<kbd className="text-xs text-on-surface/30">
-// 					⌘ K
-// 				</kbd>
-// 			</div>
-// 		</div>
-// 	);
-// }
+export const mockResults: MockFile[] = [
+	{
+		id: 'search-engine',
+		name: 'search-engine.rs',
+		path: 'crates/estate/src/modules/search/engine/search-engine.rs',
+		type: 'file',
+		extension: '.rs',
+		app: 'RustRover',
+		workspace: 'estate',
+		size: 12480,
+		modified: Date.now() - 1000 * 60 * 60 * 2,
+		description: 'Search engine implementation',
+	},
+	{
+		id: 'search-index',
+		name: 'search-index.rs',
+		path: 'crates/estate/src/modules/search/index/search-index.rs',
+		type: 'file',
+		extension: '.rs',
+		app: 'RustRover',
+		workspace: 'estate',
+		size: 7340,
+		modified: Date.now() - 1000 * 60 * 60 * 8,
+		description: 'Search index implementation',
+	},
+	{
+		id: 'search-provider',
+		name: 'search-provider.rs',
+		path: 'crates/estate/src/modules/search/providers/local/search-provider.rs',
+		type: 'file',
+		extension: '.rs',
+		app: 'RustRover',
+		workspace: 'estate',
+		size: 6821,
+		modified: Date.now() - 1000 * 60 * 60 * 24,
+		description: 'Local search provider',
+	},
+	{
+		id: 'workspace-search',
+		name: 'workspace-search-provider.rs',
+		path: 'crates/estate/src/modules/search/providers/workspace/index/workspace-search-provider.rs',
+		type: 'file',
+		extension: '.rs',
+		app: 'RustRover',
+		workspace: 'estate',
+		size: 9132,
+		modified: Date.now() - 1000 * 60 * 60 * 30,
+		description: 'Workspace search provider',
+	},
+	{
+		id: 'search-ts',
+		name: 'search.ts',
+		path: 'src/search/search.ts',
+		type: 'file',
+		extension: '.ts',
+		app: 'Zed',
+		workspace: 'estate',
+		size: 4210,
+		modified: Date.now() - 1000 * 60 * 60 * 4,
+		description: 'Frontend search implementation',
+	},
+	{
+		id: 'search-test',
+		name: 'search.test.ts',
+		path: 'src/search/tests/search.test.ts',
+		type: 'file',
+		extension: '.ts',
+		app: 'Zed',
+		workspace: 'estate',
+		size: 2831,
+		modified: Date.now() - 1000 * 60 * 60 * 12,
+		description: 'Search tests',
+	},
+	{
+		id: 'search-state',
+		name: 'search-state.ts',
+		path: 'src/ui/search/search-state.ts',
+		type: 'file',
+		extension: '.ts',
+		app: 'Zed',
+		workspace: 'estate',
+		size: 3920,
+		modified: Date.now() - 1000 * 60 * 60 * 18,
+		description: 'Search state model',
+	},
+	{
+		id: 'search-results',
+		name: 'search-results.tsx',
+		path: 'src/ui/search/components/search-results.tsx',
+		type: 'file',
+		extension: '.tsx',
+		app: 'Zed',
+		workspace: 'estate',
+		size: 5124,
+		modified: Date.now() - 1000 * 60 * 60 * 20,
+		description: 'Search results component',
+	},
+	{
+		id: 'search-bar',
+		name: 'search-bar.tsx',
+		path: 'src/ui/search/components/search-bar.tsx',
+		type: 'file',
+		extension: '.tsx',
+		app: 'Zed',
+		workspace: 'estate',
+		size: 4472,
+		modified: Date.now() - 1000 * 60 * 60 * 22,
+		description: 'Search bar component',
+	},
+	{
+		id: 'keyboard-search',
+		name: 'keyboard-search.md',
+		path: 'docs/guides/keyboard/navigation/keyboard-search.md',
+		type: 'file',
+		extension: '.md',
+		app: 'Chrome',
+		workspace: 'estate',
+		size: 1740,
+		modified: Date.now() - 1000 * 60 * 60 * 48,
+		description: 'Keyboard navigation search guide',
+	},
+	{
+		id: 'navigation-search',
+		name: 'navigation-search.ts',
+		path: 'src/navigation/search/navigation-search.ts',
+		type: 'file',
+		extension: '.ts',
+		app: 'Zed',
+		workspace: 'estate',
+		size: 3920,
+		modified: Date.now() - 1000 * 60 * 60 * 72,
+		description: 'Navigation search integration',
+	},
+	{
+		id: 'os-observer',
+		name: 'os-observer.swift',
+		path: 'crates/estate/src/modules/native/macos/native/os-observer.swift',
+		type: 'file',
+		extension: '.swift',
+		app: 'Xcode',
+		workspace: 'estate',
+		size: 18420,
+		modified: Date.now() - 1000 * 60 * 60 * 96,
+		description: 'macOS native event observer',
+	},
+]
+
+export function mockSearch(query: string): MockFile[] {
+	const term = query.trim().toLowerCase()
+
+	if (!term) {
+		return mockResults
+	}
+
+	return mockResults.filter((result) =>
+		[
+			result.name,
+			result.description,
+			result.path,
+			result.extension,
+			result.app,
+			result.workspace,
+		]
+			.filter(Boolean)
+			.some((value) => value!.toLowerCase().includes(term)),
+	)
+}
+
+export function mockSearchResults(query: string): SearchResult[] {
+	return mockSearch(query).map((file) => ({
+		id: file.id,
+		title: file.name,
+		description: file.description,
+		type: file.type,
+		path: file.path,
+		extension: file.extension,
+		app: file.app,
+		workspace: file.workspace,
+		size: file.size,
+		modified: file.modified,
+	}))
+}
