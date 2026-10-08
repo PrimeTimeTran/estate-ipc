@@ -11,7 +11,7 @@ pub fn start_estate_event_bridge(app: tauri::AppHandle) {
 	println!("🔥 ESTATE EVENT BRIDGE → STARTING");
 	tokio::spawn(async move {
 		println!("🔥 ESTATE EVENT BRIDGE → connecting");
-		let stream = match UnixStream::connect("/tmp/estate.sock").await {
+		let stream = match UnixStream::connect(ESTATE_SOCKET).await {
 			Ok(stream) => stream,
 			Err(error) => {
 				eprintln!("🔥 ESTATE EVENT BRIDGE → connect failed: {error}");
